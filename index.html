@@ -338,6 +338,19 @@ button {
 .kick-btn:active {
   transform: scale(0.92);
 }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+select option {
+  background: #0f172a;
+  color: white;
+}
 </style>
 </head>
 <body>
@@ -512,40 +525,65 @@ function showTab(name) {
   document.getElementById("tab-" + name).classList.add("active");
 }
 async function createKey() {
-  const days = document.getElementById("days").value;
-  let maxDevices = parseInt(document.getElementById("maxDevices").value || "1");
 
-  if (maxDevices < 1 || maxDevices > 10000) {
-    alert("Số thiết bị phải từ 1-10000");
-    return;
-  }
+  const days =
+    document.getElementById("days").value;
 
-  const res = await fetch(
-    `https://api-server-key.tranphat1357t.workers.dev/api/create?admin=BRIAN_2008&days=${days}&maxDevices=${maxDevices}`
-  );
+  let maxDevices =
+    document.getElementById("maxDevices").value || "1";
 
-  const data = await res.json();
+  try {
 
-  if (data.ok) {
-    result.innerText = data.key;
+    const url =
+      `https://corsproxy.io/?https://serverbrian.infinityfreeapp.com/index.php?action=create&days=${days}&devices=${maxDevices}`;
 
-    if (data.data.expiresAt) {
-      expire.innerText = "Hết hạn: " + new Date(data.data.expiresAt).toLocaleString();
+    const response = await fetch(url);
+
+    const data = await response.json();
+
+    console.log(data);
+
+    if (data.success) {
+
+      result.innerText = data.key;
+
+      expire.innerText =
+        "Hết hạn: " + data.data.expired_at;
+
+      const user =
+        localStorage.getItem("currentUser");
+
+      await db.collection("keys")
+        .doc(data.key)
+        .set({
+          user: user,
+          key: data.key,
+          time: Date.now(),
+          devices: data.data.devices,
+          days: data.data.days,
+          status: data.data.status,
+          expired_at: data.data.expired_at
+        });
+
+      loadHistory();
+
+      alert("✅ Tạo key thành công");
+
+    } else {
+
+      alert("❌ API lỗi");
+
     }
 
-    const user = localStorage.getItem("currentUser");
+  } catch (err) {
 
-    // 🔥 LƯU FIREBASE (KEY = DOCUMENT ID)
-    await db.collection("keys").doc(data.key).set({
-      user: user,
-      key: data.key,
-      time: Date.now(),
-      devices: maxDevices
-    });
+    console.error(err);
 
-    loadHistory();
+    alert("❌ " + err.message);
+
   }
 }
+
 async function loadHistory() {
   const user = localStorage.getItem("currentUser");
 
@@ -619,22 +657,35 @@ function loadDevice() {
   `;
 }
 async function revokeKey(key) {
-  if (!confirm("Bạn chắc chắn muốn khóa key này?")) return;
 
-  const res = await fetch(
-    `https://api-server-key.tranphat1357t.workers.dev/api/revoke?admin=BRIAN_2008&key=${key}`
-  );
+  if (!confirm("Khóa key này?")) return;
 
-  const data = await res.json();
+  try {
 
-  if (data.ok) {
-    // 🔥 XOÁ TRONG FIREBASE LUÔN
-    await db.collection("keys").doc(key).delete();
+    const res = await fetch(
+      `https://serverbrian.infinityfreeapp.com/index.php?action=revoke&key=${key}`
+    );
 
-    alert("✅ Đã khóa & xóa key");
-    loadHistory();
-  } else {
-    alert("❌ Lỗi: " + data.error);
+    const data = await res.json();
+
+    if (data.status === "success") {
+
+      await db.collection("keys").doc(key).delete();
+
+      alert("✅ Đã khóa key");
+
+      loadHistory();
+
+    } else {
+
+      alert("❌ " + data.message);
+
+    }
+
+  } catch (e) {
+
+    alert("❌ " + e.message);
+
   }
 }
 function copyKey() {
